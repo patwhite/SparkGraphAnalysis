@@ -19,31 +19,8 @@ case class Email(id: String, subject: String, from: List[String], to: List[Strin
 
 
 class Analyzer {
-  private def getContext = {
-    val driverPort = 7777
-    val driverHost = "localhost"
-    val master = "local"
-    val app = "Spark Graph Analysis"
-
-    val conf = new SparkConf() // skip loading external settings
-      .set("spark.logConf", "true")
-      .set("spark.driver.host", s"$driverHost")
-      .set("spark.driver.port", s"$driverPort")
-      .set("spark.cores.max", "2")
-      .set("spark.executor.memory", "4g")
-      .set("spark.eventLog.enabled", "false")
-
-    new SparkContext(master, app, conf)
-  }
-
   def exec() = {
-    val context = getContext
-    try {
-
-    } finally {
-      println("All Done")
-      context.stop()
-    }
+    println("All Done")
   }
 }
 

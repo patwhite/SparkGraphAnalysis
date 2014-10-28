@@ -20,31 +20,36 @@ and select Pre-built for Hadoop 2.4.
 
 We're going to be working on the analyer, so add this to exec:
 
+  private def getContext = {
+    val driverPort = 7777
+    val driverHost = "localhost"
+    val master = "local"
+    val app = "Spark Graph Analysis"
 
-  val driverPort = 7777
-  val driverHost = "localhost"
-  val master = "local"
-  val app = "Spark Graph Analysis"
+    val conf = new SparkConf() // skip loading external settings
+      .set("spark.logConf", "true")
+      .set("spark.driver.host", s"$driverHost")
+      .set("spark.driver.port", s"$driverPort")
+      .set("spark.cores.max", "2")
+      .set("spark.executor.memory", "4g")
+      .set("spark.eventLog.enabled", "false")
 
-  val conf = new SparkConf() 
-    .set("spark.logConf", "true")
-    .set("spark.driver.host", s"$driverHost")
-    .set("spark.driver.port", s"$driverPort")
-    .set("spark.cores.max", "2")
-    .set("spark.executor.memory", "4g")
-    .set("spark.akka.logLifecycleEvents", "true")
+    new SparkContext(master, app, conf)
+  }
 
-val sc = new SparkContext(master, app, conf)
+  
 
-  val rdd = sc.parallelize(List(1, 2, 3, 4))
-
-  val arr = rdd.collect()
-  println("Array: ")
-  arr.foreach(m =>
-    println(m)
-  )
-
-  sc.stop()
+    val context = getContext
+    try {
+      val rdd = sc.parallelize(List(1, 2, 3, 4))
+      val arr = rdd.collect()
+      println("Array: ")
+      arr.foreach(m =>
+        println(m)
+      )
+    } finally { 
+      context.stop()
+    }
 
 
 Test that it’s all working!
