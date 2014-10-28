@@ -38,9 +38,12 @@ class Analyzer {
 
   def exec() = {
     val context = getContext
+    try {
 
-
-    context.stop()
+    } finally {
+      println("All Done")
+      context.stop()
+    }
   }
 }
 
