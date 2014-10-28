@@ -85,7 +85,8 @@ class DataLoader(accessToken: String) {
         case t: String => throw new NotImplementedError(t)
       }
 
-      val doc = BSONDocument(mappedProps) ++ ("_id" -> messageId)
+      val docInt = BSONDocument(mappedProps) ++ ("_id" -> messageId)
+      val doc = if(docInt.get("Subject").isDefined) docInt else docInt ++ ("Subject" -> "")
       coll.save(doc)
       println(s"Saving message: $messageId - ${props.get("Subject")}")
     }

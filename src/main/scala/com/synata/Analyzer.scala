@@ -16,6 +16,17 @@ import java.io._
 
 case class Email(id: String, subject: String, from: List[String], to: List[String], cc: List[String], bcc: List[String])
 
+case class CountTracker(inFromSource: Int, outToSource: Int) {
+  def getRatio = if(outToSource == 0) Double.NegativeInfinity else inFromSource.toDouble / outToSource.toDouble
+  def total = inFromSource + outToSource
+  def incIn: CountTracker = copy(inFromSource + 1, outToSource)
+  def incOut: CountTracker = copy(inFromSource, outToSource + 1)
+  def merge(toMerge: CountTracker): CountTracker = {
+    val out = CountTracker(toMerge.inFromSource + inFromSource, toMerge.outToSource + outToSource)
+    out
+  }
+}
+
 class Analyzer {
   private def getContext = {
     val driverPort = 7777
@@ -71,21 +82,26 @@ class Analyzer {
 
     Analyzer.outputGraph("MainGraph.gml", g)
 
+    //Page Rank
     val pageRanked = g.pageRank(0.01).vertices
 
     val ranked = pageRanked.join(emailListRDD)
-                           .sortBy(m => m._2._1)
+                           .sortBy(m => m._2._1, ascending = false)
 
-    val prOutput = ranked.collect()
+    val prOutput = ranked.take(100) //Only grab the top 100
     prOutput.foreach { m =>
       println(s"${m._2._2}: ${m._2._1}")
     }
 
-    val stronglyConnected = g.stronglyConnectedComponents(10)
+    val me = (prOutput.head._1, prOutput.head._2._2)
+    println(s"I am: $me")
+
+
+    //Strongly Connected
+    val stronglyConnected = g.filter(m => m, vpred = (id, m: String) => id != me._1).stronglyConnectedComponents(10)
 
 
     val strongGraph = stronglyConnected.collectEdges(EdgeDirection.Out)
-    //                                 .filter(m => m._2.length > 2)
 
     strongGraph.collect().foreach { e =>
       val email = emailLookup(e._1)
@@ -99,6 +115,44 @@ class Analyzer {
       }
       connected.distinct.foreach(c => println("\t" + c))
     }
+
+
+    //Pregel
+    val initialGraph = g.mapVertices((id, _) => CountTracker(0,0))
+    val crs = initialGraph.pregel(CountTracker(0,0), activeDirection = EdgeDirection.Both, maxIterations = 1)(
+      (src, currentCount, message) => {
+        currentCount.merge(message)
+      }, // Vertex Program
+      triplet => {  // Send Message
+        if(triplet.srcId == me._1) {
+          //Send to dest
+          Iterator((triplet.dstId, CountTracker(1, 0)))
+        } else if(triplet.dstId == me._1) {
+          //Send to src
+          Iterator((triplet.srcId, CountTracker(0, 1)))
+        } else {
+          Iterator.empty
+        }
+      },
+      (a,b) => {
+        a.merge(b)
+      } // Merge Message
+    )
+
+    val orderedCRS = crs.vertices.join(emailListRDD)
+                .map(m => {
+                  val ratio = m._2._1.getRatio
+                  val total = m._2._1.total
+                  val mult = if(ratio.isInfinite) Double.NegativeInfinity else ratio * total
+                  (m._2._2, ratio, math.abs(1 - ratio), mult)
+                })
+
+
+//    println(orderedCRS.sortBy(m => m._3).collect.mkString("\n"))
+//
+//    println("------------")
+
+    println(orderedCRS.sortBy(m => m._4, ascending = false).collect.mkString("\n"))
 
     context.stop()
   }
