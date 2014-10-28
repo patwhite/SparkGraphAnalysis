@@ -1,11 +1,32 @@
 First:
+Get the sample code!
+https://github.com/Synata/SparkGraphAnalysis
+
+
+You'll need to download spark from 	
+http://d3kbcqa49mib13.cloudfront.net/spark-1.1.0-bin-hadoop2.4.tgz
+
+Also for datea loading, you'll want to grab a token from here
+https://developers.google.com/gmail/api/v1/reference/users/messages/list
+
+Unzip it, and just take the spark_assembly jar from lib/
+
+
+
+Or, if that link doesn't work, go to:
+https://spark.apache.org/downloads.html
+and select Pre-built for Hadoop 2.4.
+
+
+We're going to be working on the analyer, so add this to exec:
+
 
   val driverPort = 7777
   val driverHost = "localhost"
   val master = "local"
   val app = "Spark Graph Analysis"
 
-  val conf = new SparkConf() // skip loading external settings
+  val conf = new SparkConf() 
     .set("spark.logConf", "true")
     .set("spark.driver.host", s"$driverHost")
     .set("spark.driver.port", s"$driverPort")
