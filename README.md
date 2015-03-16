@@ -22,6 +22,9 @@ Copy and paste <TOKEN> into the command.
 
 sbt "run analyze" - This will run the actual graph analysis (assuming you have data in Mongo)
 
+You're now ready to run through the [Tutorial](Tutorial.md)
+
+
 TODO
 =========================
 1. Add more configuration options
