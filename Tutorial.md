@@ -60,7 +60,7 @@ private def getContext = {
 Now, add this to the exec() function.
   
 ```
-val context = getContext
+val sc = getContext
 try {
 	val rdd = sc.parallelize(List(1, 2, 3, 4))
 	val arr = rdd.collect()
@@ -69,7 +69,7 @@ try {
 		println(m)
 	)
 } finally { 
-	context.stop()
+	sc.stop()
 }
 ```
 
