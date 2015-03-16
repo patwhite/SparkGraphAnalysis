@@ -116,7 +116,7 @@ Let’s add some Mongo In:
 Replace hardcoded rdd- 
 
 ```
-//Add to the exec function
+//Replace the try block of the exec function
 val mongoUri = s"mongodb://localhost"
 val hadoopConfig = new Configuration()
 
@@ -129,11 +129,25 @@ val rdd = context.newAPIHadoopRDD(hadoopConfig, classOf[com.mongodb.hadoop.Mongo
 
 So, the really cool park about spark and graphx, is you can do neat munging. Our goal here is to create a graph of people that we can then analyze, but we’re starting with just a simple list of emails. Let’s start with creating our nodes
 
+First, we need to add a helper function to the analyzer object
+```
+  // Add to analyzer object
+  def parseObj(obj: BSONObject): Email = {
+    val from = if(obj.containsField("From")) obj.get("From").asInstanceOf[BasicDBList].map(_.toString).toList else List()
+    val to = if(obj.containsField("To")) obj.get("To").asInstanceOf[BasicDBList].map(_.toString).toList else List()
+    val cc = if(obj.containsField("CC")) obj.get("CC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
+    val bcc = if(obj.containsField("BCC")) obj.get("BCC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
 
-Let's start by simply creating a list of unique email addresses.
+    val subject = obj.get("Subject").toString
+    val id = obj.get("_id").toString
+    Email(id, subject, from, to, cc, bcc)
+  }
+```
 
+Let's start our analysis effort by simply creating a list of unique email addresses.
 
 ```
+//Add to try block of exec function
 	val mapped = rdd.map(m => Analyzer.parseObj(m._2))
 	val emailListRDD = mapped.flatMap(m => m.from ::: m.to ::: m.cc ::: m.bcc)
 			.distinct()
@@ -147,7 +161,12 @@ Let's start by simply creating a list of unique email addresses.
 		})
 ```
 
-Alright, here's where the magic happens! Let's actually map this list to a graph
+Let's try it out, and dump the email addresses:
+```
+sbt "run analyze"
+```
+
+Alright, here's where the magic happens! Let's actually make a graph!
 
 First, add the following code to the analyzer object
 ```
@@ -160,17 +179,6 @@ First, add the following code to the analyzer object
       val bcc = obj.bcc.map(t => Edge(fId, lookup(t), "BCCed"))
       to ::: cc ::: bcc
     }
-  }
-
-  def parseObj(obj: BSONObject): Email = {
-    val from = if(obj.containsField("From")) obj.get("From").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val to = if(obj.containsField("To")) obj.get("To").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val cc = if(obj.containsField("CC")) obj.get("CC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val bcc = if(obj.containsField("BCC")) obj.get("BCC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-
-    val subject = obj.get("Subject").toString
-    val id = obj.get("_id").toString
-    Email(id, subject, from, to, cc, bcc)
   }
 ```
 
