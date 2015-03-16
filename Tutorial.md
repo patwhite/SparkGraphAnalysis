@@ -83,7 +83,7 @@ Test that it’s all working!
 sbt "run analyze"
 ```
 
-Ok, next tricky part - we need to create a distributable jar for spark. We're using an SBT Plugin called Assembly:
+Ok, small tricky part - we need to create a distributable jar for spark. We're using an SBT Plugin called Assembly:
 
 ```
 sbt assembly
@@ -126,39 +126,27 @@ val rdd = context.newAPIHadoopRDD(hadoopConfig, classOf[com.mongodb.hadoop.Mongo
 
 So, the really cool park about spark and graphx, is you can do neat munging. Our goal here is to create a graph of people that we can then analyze, but we’re starting with just a simple list of emails. Let’s start with creating our nodes
 
-Couple of items – add a mapper to the Analyzer object (there's some other code in there already):
 
-```
-object Analyzer {
-  def parseObj(obj: BSONObject): Email = {
-    val from = if(obj.containsField("From")) obj.get("From").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val to = if(obj.containsField("To")) obj.get("To").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val cc = if(obj.containsField("CC")) obj.get("CC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-    val bcc = if(obj.containsField("BCC")) obj.get("BCC").asInstanceOf[BasicDBList].map(_.toString).toList else List()
-
-    val subject = obj.get("Subject").toString
-    val id = obj.get("_id").toString
-    Email(id, subject, from, to, cc, bcc)
-  }
-  
-  ...
-
-}
-```
-
-Next, we’re going to simply create a  list of unique email addresses.
+Let's start by simply creating a list of unique email addresses.
 
 
 ```
-    val mapped = rdd.map(m => Analyzer.parseObj(m._2))
-
-    val emailListRDD = mapped.flatMap(m => m.from ::: m.to ::: m.cc ::: m.bcc)
-                             .distinct()
-                             .zipWithIndex()
-                             .map(m => (m._2, m._1))
+	val mapped = rdd.map(m => Analyzer.parseObj(m._2))
+	val emailListRDD = mapped.flatMap(m => m.from ::: m.to ::: m.cc ::: m.bcc)
+			.distinct()
+        		.zipWithIndex()
+        		.map(m => (m._2, m._1))
+        		
+        // Just to prove we're doing something - we'll remove this.
+	emailListRDD.collect()
+		.foreach(m => {
+			println(m._2)
+		})
 ```
 
-Then, let's actually map this list to a graph
+Alright, here's where the magic happens! Let's actually map this list to a graph
+
+First, add the following code to the analyzer object
 ```
 //Goes in the Analyzer Object
   def parseEdge(obj: Email, lookup: Map[String, Long]): List[Edge[String]] = {
@@ -181,8 +169,12 @@ Then, let's actually map this list to a graph
     val id = obj.get("_id").toString
     Email(id, subject, from, to, cc, bcc)
   }
+```
 
+And add this to the exec() function.
 
+```
+// This goes in the exec function
     val emailLookup = emailListRDD.collect().toMap
     val idLookup = emailLookup.map(m => (m._2, m._1)).toMap
 
@@ -193,16 +185,24 @@ Then, let's actually map this list to a graph
     Analyzer.outputGraph("MainGraph.gml", g)
 ```
 
+Run the analysis, and you'll be able to view your email graph. I use Gephi for visualization.
+
+```
+sbt "run analyze"
+```
+
 Ok, now the magic happens – we’re going to use two out of the box graph analysis techniques with 
 
 First, everyone here has heard of pagerank:
 
 ```
 //Page Rank
+//Add to the analyzer object
+def calculatePageRankAndGetSelf(g: Graph[String, String], emailListRDD: RDD[(Long, String)]): (Long, String) = {
     val pageRanked = g.pageRank(0.01).vertices
 
     val ranked = pageRanked.join(emailListRDD)
-                           .sortBy(m => m._2._1, ascending = false)
+      .sortBy(m => m._2._1, ascending = false)
 
     val prOutput = ranked.take(100) //Only grab the top 100
     prOutput.foreach { m =>
@@ -210,15 +210,24 @@ First, everyone here has heard of pagerank:
     }
 
     val me = (prOutput.head._1, prOutput.head._2._2)
+
     println(s"I am: $me")
+
+    me
+}
 ```
 
+```
+//Add to the exec function
+val me = calculatePageRankAndGetSelf(g, emailListRDD)
+```
 
 Let's look at strongly connected components - this is a method for community finding
 ```
- //Strongly Connected
-    val stronglyConnected = g.filter(m => m, vpred = (id, m: String) => id != me._1).stronglyConnectedComponents(10)
 
+ //Add to the Analyzer object
+def calculateStronglyConnected(me: (Long, String), g: Graph[String, String], emailLookup: Map[Long, String]) = {
+    val stronglyConnected = g.filter(m => m, vpred = (id, m: String) => id != me._1).stronglyConnectedComponents(10)
 
     val strongGraph = stronglyConnected.collectEdges(EdgeDirection.Out)
 
@@ -234,11 +243,13 @@ Let's look at strongly connected components - this is a method for community fin
       }
       connected.distinct.foreach(c => println("\t" + c))
     }
-
+  }
 ```
 
-
-
+```
+//Add to the exec function
+calculateStronglyConnected(me, g, emailLookup)
+```
 
 Finally, let's write our own algorithm
 
@@ -246,6 +257,7 @@ Finally, let's write our own algorithm
 First, we need some way to track messageing counts
 
 ```
+//Add near the top of the analyzer file
 case class CountTracker(inFromSource: Int, outToSource: Int) {
   def getRatio = if(outToSource == 0) Double.NegativeInfinity else inFromSource.toDouble / outToSource.toDouble
   def total = inFromSource + outToSource
@@ -256,41 +268,56 @@ case class CountTracker(inFromSource: Int, outToSource: Int) {
     out
   }
 }
-
+```
+```
+//Add to the Analyzer Object
+def calculateCRS(me: (Long, String), g: Graph[String, String], emailListRDD: RDD[(Long, String)]) = {
     //Pregel
+    def processMessages = (src: VertexId, currentCount: CountTracker, message: CountTracker) => {
+      currentCount.merge(message)
+    }
+
+    def sendMessages = (triplet: EdgeTriplet[CountTracker, String]) => {
+      if(triplet.srcId == me._1) {
+        //Send to dest
+        Iterator((triplet.dstId, CountTracker(1, 0)))
+      } else if(triplet.dstId == me._1) {
+        //Send to src
+        Iterator((triplet.srcId, CountTracker(0, 1)))
+      } else {
+        Iterator.empty
+      }
+    }
+
+    def mergeMessages = (a: CountTracker, b: CountTracker) => {
+      a.merge(b)
+    }
+
     val initialGraph = g.mapVertices((id, _) => CountTracker(0,0))
     val crs = initialGraph.pregel(CountTracker(0,0), activeDirection = EdgeDirection.Both, maxIterations = 1)(
-      (src, currentCount, message) => {
-        currentCount.merge(message)
-      }, // Vertex Program
-      triplet => {  // Send Message
-        if(triplet.srcId == me._1) {
-          //Send to dest
-          Iterator((triplet.dstId, CountTracker(1, 0)))
-        } else if(triplet.dstId == me._1) {
-          //Send to src
-          Iterator((triplet.srcId, CountTracker(0, 1)))
-        } else {
-          Iterator.empty
-        }
-      },
-      (a,b) => {
-        a.merge(b)
-      } // Merge Message
+      processMessages, // Vertex Program
+      sendMessages,
+      mergeMessages
     )
 
     val orderedCRS = crs.vertices.join(emailListRDD)
-                .map(m => {
-                  val ratio = m._2._1.getRatio
-                  val total = m._2._1.total
-                  val mult = if(ratio.isInfinite) Double.NegativeInfinity else ratio * total
-                  (m._2._2, ratio, math.abs(1 - ratio), mult)
-                })
+      .map(m => {
+      val ratio = m._2._1.getRatio
+      val total = m._2._1.total
+      val mult = if(ratio.isInfinite) Double.NegativeInfinity else ratio * total
+      (m._2._2, ratio, math.abs(1 - ratio), mult)
+    }).filter(m => m._2 != Double.NegativeInfinity && m._2 != 0D)
 
 
     println(orderedCRS.sortBy(m => m._3).collect.mkString("\n"))
 
     println("------------")
 
-    println(orderedCRS.sortBy(m => m._4, ascending = false).collect.mkString("\n"))
+    println(orderedCRS.sortBy(m => m._4, ascending = true).collect.mkString("\n"))
+  }
+```
+
+```
+//Add to the exec function
+calculateCRS(me, g, emailListRDD)
 ```
