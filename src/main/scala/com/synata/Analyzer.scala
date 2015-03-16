@@ -59,8 +59,6 @@ object Analyzer {
         |]
       """.stripMargin
 
-//    println(output)
-
     val writer = new PrintWriter(new File(filename))
     writer.write(output)
     writer.close()

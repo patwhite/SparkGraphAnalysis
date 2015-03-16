@@ -64,7 +64,7 @@ class DataLoader(accessToken: String) {
         .setFormat("metadata")
         .setMetadataHeaders(List("from", "to", "cc", "bcc", "subject"))
 
-      //TODO(pwhite): Add a exponential back retry here
+      //TODO(pwhite): Add a exponential back-off retry here
       val message = messageReq.execute()
 
 
