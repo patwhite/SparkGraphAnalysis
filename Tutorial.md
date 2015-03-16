@@ -75,8 +75,9 @@ try {
 
 Test that it’s all working!
 
+```
 sbt "run analyze"
-
+```
 
 Replace SparkContext:
 ```
