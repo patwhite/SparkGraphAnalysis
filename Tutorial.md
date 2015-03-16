@@ -6,17 +6,36 @@ https://github.com/Synata/SparkGraphAnalysis
 You'll need to download spark from 	
 http://d3kbcqa49mib13.cloudfront.net/spark-1.1.0-bin-hadoop2.4.tgz
 
-Also for data loading, you'll want to grab a token from here
-https://developers.google.com/gmail/api/v1/reference/users/messages/list
-
 Unzip it, and just take the spark_assembly jar from lib/
-
-
 
 Or, if that link doesn't work, go to:
 https://spark.apache.org/downloads.html
 and select Pre-built for Hadoop 2.4.
 
+--------
+Make sure Mongo is running at localhost:27017
+
+To start with, we need some data to graph analyze. The easiest way to get some relevant graph data is your email!
+
+We'll be using OAuth / API calls to get the data. You'll need an access token.
+The easiest way to get your Gmail Access Token is with the Gmail API Playground. Go to:
+https://developers.google.com/gmail/api/v1/reference/users/messages/list
+and under "Try It" click the "Authorize Oauth" button. Open the developer console, and find the request that ends with /me - Look for the header: 
+
+```
+"Authorization: Bearer <TOKEN>" 
+```
+
+Copy and paste <TOKEN> into the command:
+
+The usage is:
+```
+sbt "run load <Gmail Access Token>"
+```
+
+This will dump your gmail and load metadata into Mongo.
+
+---------
 
 We're going to be working on the analyzer, so add this to exec:
 
