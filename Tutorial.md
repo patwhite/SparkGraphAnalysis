@@ -20,6 +20,7 @@ and select Pre-built for Hadoop 2.4.
 
 We're going to be working on the analyzer, so add this to exec:
 
+```
 private def getContext = {
 	val driverPort = 7777
 	val driverHost = "localhost"
@@ -33,23 +34,23 @@ private def getContext = {
       			.set("spark.cores.max", "2")
       			.set("spark.executor.memory", "4g")
       			.set("spark.eventLog.enabled", "false")
-    	new SparkContext(master, app, conf)
+	new SparkContext(master, app, conf)
 }
-
+```
   
-
-    val context = getContext
-    try {
-      val rdd = sc.parallelize(List(1, 2, 3, 4))
-      val arr = rdd.collect()
-      println("Array: ")
-      arr.foreach(m =>
-        println(m)
-      )
-    } finally { 
-      context.stop()
-    }
-
+```
+val context = getContext
+try {
+	val rdd = sc.parallelize(List(1, 2, 3, 4))
+	val arr = rdd.collect()
+	println("Array: ")
+	arr.foreach(m =>
+		println(m)
+	)
+} finally { 
+	context.stop()
+}
+```
 
 Test that it’s all working!
 
@@ -57,40 +58,42 @@ sbt run
 
 
 Replace SparkContext:
+```
+val jarFile = "target/scala-2.10/SparkGraphAnalysis-assembly-1.0.jar"
+val mongoDriverFile = "lib/mongo-java-driver-2.12.4.jar"
+val mongoHadoopFile = "lib/mongo-hadoop-core-1.3.0.jar"
 
-  	val jarFile = "target/scala-2.10/SparkGraphAnalysis-assembly-1.0.jar"
-	val mongoDriverFile = "lib/mongo-java-driver-2.12.4.jar"
-	val mongoHadoopFile = "lib/mongo-hadoop-core-1.3.0.jar"
-
-	context.addJar(jarFile)
-	context.addJar(mongoDriverFile)
-	context.addJar(mongoHadoopFile)
-
+context.addJar(jarFile)
+context.addJar(mongoDriverFile)
+context.addJar(mongoHadoopFile)
+```
 
 Test it out, make sure it’s finding the jars
 
+```
 sbt run
-
+```
 
 
 Let’s add some Mongo In:
 Replace hardcoded rdd- 
 
-	val mongoUri = s"mongodb://localhost"
-	val hadoopConfig = new Configuration()
+```
+val mongoUri = s"mongodb://localhost"
+val hadoopConfig = new Configuration()
 
-	hadoopConfig.set("mongo.input.uri", s"$mongoUri/graph.data")
-	hadoopConfig.set("mongo.output.uri", s"$mongoUri/analysis.output")
+hadoopConfig.set("mongo.input.uri", s"$mongoUri/graph.data")
+hadoopConfig.set("mongo.output.uri", s"$mongoUri/analysis.output")
 
 
-	val rdd = context.newAPIHadoopRDD(hadoopConfig, classOf[com.mongodb.hadoop.MongoInputFormat], classOf[Object], classOf[BSONObject])
-
+val rdd = context.newAPIHadoopRDD(hadoopConfig, classOf[com.mongodb.hadoop.MongoInputFormat], classOf[Object], classOf[BSONObject])
+```
 
 So, the really cool park about spark and graphx, is you can do neat munging. Our goal here is to create a graph of people that we can then analyze, but we’re starting with just a simple list of emails. Let’s start with creating our nodes
 
 Couple of items – add a mapper:
 
-
+```
 object Analyzer {
   def parseObj(obj: BSONObject): Email = {
     val from = if(obj.containsField("From")) obj.get("From").asInstanceOf[BasicDBList].map(_.toString).toList else List()
@@ -103,21 +106,22 @@ object Analyzer {
     Email(id, subject, from, to, cc, bcc)
   }
 }
-
+```
 
 Next, we’re going to simply create a  list of unique email addresses.
 
 
-
+```
     val mapped = rdd.map(m => Analyzer.parseObj(m._2))
 
     val emailListRDD = mapped.flatMap(m => m.from ::: m.to ::: m.cc ::: m.bcc)
                              .distinct()
                              .zipWithIndex()
                              .map(m => (m._2, m._1))
-
+```
 
 Then, let's actually map this list to a graph
+```
 //Goes in the Analyzer Object
   def parseEdge(obj: Email, lookup: Map[String, Long]): List[Edge[String]] = {
     obj.from.flatMap { f =>
@@ -149,12 +153,13 @@ Then, let's actually map this list to a graph
     val g = Graph(emailListRDD, edges)
 
     Analyzer.outputGraph("MainGraph.gml", g)
-
+```
 
 Ok, now the magic happens – we’re going to use two out of the box graph analysis techniques with 
 
 First, everyone here has heard of pagerank:
 
+```
 //Page Rank
     val pageRanked = g.pageRank(0.01).vertices
 
@@ -168,10 +173,11 @@ First, everyone here has heard of pagerank:
 
     val me = (prOutput.head._1, prOutput.head._2._2)
     println(s"I am: $me")
-
+```
 
 
 Let's look at strongly connected components - this is a method for community finding
+```
  //Strongly Connected
     val stronglyConnected = g.filter(m => m, vpred = (id, m: String) => id != me._1).stronglyConnectedComponents(10)
 
@@ -191,7 +197,7 @@ Let's look at strongly connected components - this is a method for community fin
       connected.distinct.foreach(c => println("\t" + c))
     }
 
-
+```
 
 
 
@@ -200,6 +206,8 @@ Finally, let's write our own algorithm
 
 
 First, we need some way to track messageing counts
+
+```
 case class CountTracker(inFromSource: Int, outToSource: Int) {
   def getRatio = if(outToSource == 0) Double.NegativeInfinity else inFromSource.toDouble / outToSource.toDouble
   def total = inFromSource + outToSource
@@ -210,8 +218,6 @@ case class CountTracker(inFromSource: Int, outToSource: Int) {
     out
   }
 }
-
-
 
     //Pregel
     val initialGraph = g.mapVertices((id, _) => CountTracker(0,0))
@@ -244,11 +250,9 @@ case class CountTracker(inFromSource: Int, outToSource: Int) {
                 })
 
 
-//    println(orderedCRS.sortBy(m => m._3).collect.mkString("\n"))
-//
-//    println("------------")
+    println(orderedCRS.sortBy(m => m._3).collect.mkString("\n"))
+
+    println("------------")
 
     println(orderedCRS.sortBy(m => m._4, ascending = false).collect.mkString("\n"))
-
-
-
+```
