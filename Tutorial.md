@@ -92,8 +92,9 @@ sbt assembly
 This creates a jar that we'll be using shortly.
 
 
-Replace SparkContext:
+Setup the full Spark Context
 ```
+//Add to the getContext call
 val jarFile = "target/scala-2.10/SparkGraphAnalysis-assembly-1.0.jar"
 val mongoDriverFile = "lib/mongo-java-driver-2.12.4.jar"
 val mongoHadoopFile = "lib/mongo-hadoop-core-1.3.0.jar"
