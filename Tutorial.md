@@ -75,7 +75,7 @@ try {
 
 Test that it’s all working!
 
-sbt run
+sbt "run analyze"
 
 
 Replace SparkContext:
