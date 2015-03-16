@@ -115,6 +115,7 @@ Let’s add some Mongo In:
 Replace hardcoded rdd- 
 
 ```
+//Add to the exec function
 val mongoUri = s"mongodb://localhost"
 val hadoopConfig = new Configuration()
 
