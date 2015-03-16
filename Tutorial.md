@@ -37,7 +37,7 @@ This will dump your gmail and load metadata into Mongo.
 
 ---------
 
-We're going to be working on the analyzer, so add this to exec:
+We're going to be working on the analyzer, so add this to the Analyzer class:
 
 ```
 private def getContext = {
@@ -56,6 +56,8 @@ private def getContext = {
 	new SparkContext(master, app, conf)
 }
 ```
+
+Now, add this to the exec() function.
   
 ```
 val context = getContext
