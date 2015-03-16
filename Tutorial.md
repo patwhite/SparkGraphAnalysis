@@ -40,6 +40,7 @@ This will dump your gmail and load metadata into Mongo.
 We're going to be working on the analyzer, so add this to the Analyzer class:
 
 ```
+//Add to analyzer class
 private def getContext = {
 	val driverPort = 7777
 	val driverHost = "localhost"
