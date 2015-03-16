@@ -53,23 +53,27 @@ private def getContext = {
       			.set("spark.cores.max", "2")
       			.set("spark.executor.memory", "4g")
       			.set("spark.eventLog.enabled", "false")
-	new SparkContext(master, app, conf)
+	val context = new SparkContext(master, app, conf)
+	
+	// Context setup code will go here
+	
+	context
 }
 ```
 
 Now, add this to the exec() function.
   
 ```
-val sc = getContext
+val context = getContext
 try {
-	val rdd = sc.parallelize(List(1, 2, 3, 4))
+	val rdd = context.parallelize(List(1, 2, 3, 4))
 	val arr = rdd.collect()
 	println("Array: ")
 	arr.foreach(m =>
 		println(m)
 	)
 } finally { 
-	sc.stop()
+	context.stop()
 }
 ```
 
@@ -78,6 +82,15 @@ Test that it’s all working!
 ```
 sbt "run analyze"
 ```
+
+Ok, next tricky part - we need to create a distributable jar for spark. We're using an SBT Plugin called Assembly:
+
+```
+sbt assembly
+```
+
+This creates a jar that we'll be using shortly.
+
 
 Replace SparkContext:
 ```
@@ -93,7 +106,7 @@ context.addJar(mongoHadoopFile)
 Test it out, make sure it’s finding the jars
 
 ```
-sbt run
+sbt "run analyze"
 ```
 
 
@@ -113,7 +126,7 @@ val rdd = context.newAPIHadoopRDD(hadoopConfig, classOf[com.mongodb.hadoop.Mongo
 
 So, the really cool park about spark and graphx, is you can do neat munging. Our goal here is to create a graph of people that we can then analyze, but we’re starting with just a simple list of emails. Let’s start with creating our nodes
 
-Couple of items – add a mapper:
+Couple of items – add a mapper to the Analyzer object (there's some other code in there already):
 
 ```
 object Analyzer {
@@ -127,6 +140,9 @@ object Analyzer {
     val id = obj.get("_id").toString
     Email(id, subject, from, to, cc, bcc)
   }
+  
+  ...
+
 }
 ```
 
