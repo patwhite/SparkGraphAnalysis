@@ -1,10 +1,12 @@
 Synata's SparkGraphAnalysis class
 =========================
 
-This is a standalone tutorial for running some graph analysis on your enterprise data, in this case your Email.
+Tutorial
+=========================
+The easiest way to get going is to follow our [Tutorial](Tutorial.md)
 
-Make sure Mongo is running at localhost:27017
-The usage is:
+Useage
+=========================
 ```
 sbt "run load <Gmail Access Token>"
 ```
@@ -20,9 +22,13 @@ and under "Try It" click the "Authorize Oauth" button. Open the developer consol
 
 Copy and paste <TOKEN> into the command.
 
-sbt "run analyze" - This will run the actual graph analysis (assuming you have data in Mongo)
+```
+sbt "run analyze"
+```
 
-You're now ready to run through the [Tutorial](Tutorial.md)
+This will run the actual graph analysis (assuming you have data in Mongo)
+
+
 
 
 TODO
